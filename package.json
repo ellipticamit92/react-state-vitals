@@ -1,0 +1,80 @@
+{
+  "name": "react-state-vitals",
+  "version": "0.1.0",
+  "description": "Zero-config memory monitor for React apps — Zustand, React Context, React Query, and JS heap",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./zustand": {
+      "types": "./dist/integrations/zustand/index.d.ts",
+      "import": "./dist/integrations/zustand/index.mjs",
+      "require": "./dist/integrations/zustand/index.js"
+    },
+    "./react-query": {
+      "types": "./dist/integrations/react-query/index.d.ts",
+      "import": "./dist/integrations/react-query/index.mjs",
+      "require": "./dist/integrations/react-query/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui"
+  },
+  "peerDependencies": {
+    "@tanstack/react-query": ">=4.0.0",
+    "react": ">=17.0.0",
+    "react-dom": ">=17.0.0",
+    "zustand": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "zustand": {
+      "optional": true
+    },
+    "@tanstack/react-query": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.2",
+    "@types/node": "^25.5.2",
+    "@types/react": "^18.3.28",
+    "@types/react-dom": "^18.3.7",
+    "@vitest/ui": "^4.1.4",
+    "autoprefixer": "^10.4.27",
+    "postcss": "^8.5.9",
+    "tailwindcss": "^4.2.2",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.4",
+    "zustand": "^5.0.12"
+  },
+  "keywords": [
+    "memory",
+    "monitor",
+    "zustand",
+    "react",
+    "devtools",
+    "heap"
+  ],
+  "license": "MIT"
+}

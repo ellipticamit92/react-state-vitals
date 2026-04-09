@@ -1,0 +1,48 @@
+// Re-exports of zustand/middleware with name interception.
+// Import these instead of "zustand/middleware" — API is identical.
+//
+//   import { persist, devtools } from "react-state-vitals/zustand"
+
+export type {
+  PersistOptions,
+  DevtoolsOptions,
+} from 'zustand/middleware'
+
+import {
+  devtools as zustandDevtools,
+  persist as zustandPersist,
+} from 'zustand/middleware'
+import type { StateCreator, StoreMutatorIdentifier } from 'zustand'
+import { setNameContext } from './name-context'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyMutators = [StoreMutatorIdentifier, unknown][]
+
+// devtools wrapper — captures name option so create() can use it automatically
+export function devtools<
+  T,
+  Mps extends AnyMutators = [],
+  Mcs extends AnyMutators = [],
+>(
+  initializer: StateCreator<T, [...Mps, ['zustand/devtools', never]], Mcs>,
+  options?: { name?: string; [key: string]: unknown },
+): StateCreator<T, Mps, [['zustand/devtools', never], ...Mcs]> {
+  if (options?.name) setNameContext(options.name)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return zustandDevtools(initializer as any, options as any) as any
+}
+
+// persist wrapper — captures name option as fallback if devtools isn't used
+export function persist<
+  T,
+  Mps extends AnyMutators = [],
+  Mcs extends AnyMutators = [],
+>(
+  initializer: StateCreator<T, [...Mps, ['zustand/persist', unknown]], Mcs>,
+  options: { name: string; [key: string]: unknown },
+): StateCreator<T, Mps, [['zustand/persist', unknown], ...Mcs]> {
+  // Only set if devtools hasn't already provided a name
+  setNameContext(options.name)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return zustandPersist(initializer as any, options as any) as any
+}
