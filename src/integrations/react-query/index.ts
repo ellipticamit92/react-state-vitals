@@ -1,3 +1,14 @@
+export async function detectReactQuery(): Promise<boolean> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    await import(/* webpackIgnore: true */ /* @vite-ignore */ '@tanstack/react-query')
+    return true
+  } catch {
+    return false
+  }
+}
+
 // React Query (TanStack Query v4/v5) integration.
 // Subscribes to the QueryCache event bus — fully reactive, no polling needed.
 //

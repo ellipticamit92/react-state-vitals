@@ -73,6 +73,8 @@
     "monitor",
     "zustand",
     "react",
+    "react-query",
+    "tanstack-query",
     "devtools",
     "heap"
   ],

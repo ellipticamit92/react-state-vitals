@@ -16,6 +16,11 @@ export const ACCENT_COLORS = {
     bar: 'bg-blue-500',
     dot: 'bg-blue-400',
   },
+  purple: {
+    text: 'text-purple-400',
+    bar: 'bg-purple-500',
+    dot: 'bg-purple-400',
+  },
 } as const
 
 export type Accent = keyof typeof ACCENT_COLORS

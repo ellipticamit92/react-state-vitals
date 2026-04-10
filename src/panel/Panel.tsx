@@ -174,11 +174,14 @@ function CacheRow({ store }: { store: StoreInfo }) {
       name={store.name}
       sizeKB={store.sizeKB}
       limitKB={store.limitKB}
+      accent="purple"
       extra={
         <>
-          {fetching > 0 && <span className="text-blue-400">F</span>}
-          {errors > 0 && <span className="text-red-400">E</span>}
-          <span className="text-gray-400">{queries.length}q</span>
+          {fetching > 0 && (
+            <span className="text-blue-400">{fetching} fetching</span>
+          )}
+          {errors > 0 && <span className="text-red-400">{errors} err</span>}
+          <span className="text-gray-400">{queries.length} queries</span>
         </>
       }
     />
@@ -327,7 +330,7 @@ export function Panel() {
               <span className="text-emerald-400">
                 {heap.usedMB.toFixed(1)} MB
               </span>
-              <span className="text-slate-600">/ {heap.limitMB} MB</span>
+              <span className="text-slate-400">/ {heap.limitMB} MB</span>
             </div>
           </div>
           <ProgressBar
