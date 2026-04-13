@@ -4,15 +4,6 @@ import { registerStore, unregisterStore } from '../../core/registry'
 import { emitter } from '../../core/emitter'
 import type { StoreSnapshot } from '../../core/registry'
 
-export async function detectReact(): Promise<boolean> {
-  try {
-    await import('react')
-    return true
-  } catch {
-    return false
-  }
-}
-
 const DEFAULT_LIMIT_KB = 50
 
 function measureKB(value: unknown): number {
@@ -45,8 +36,6 @@ function notify(
     emitter.emit('store:warning', { name, sizeKB, limitKB })
   }
 }
-
-// ─── Hook API ────────────────────────────────────────────────────────────────
 
 export interface UseContextMonitorOptions {
   limitKB?: number
@@ -82,8 +71,6 @@ export function useContextMonitor(
     typeof options === 'number' ? { limitKB: options } : options
   const { limitKB = DEFAULT_LIMIT_KB, getValue } = opts
 
-  // Always keep the latest value/getter in refs so the stable getter below
-  // always reads fresh data without needing to re-register.
   const valueRef = useRef<unknown>(value)
   const getterRef = useRef<(() => unknown) | undefined>(getValue)
   const snapshotsRef = useRef<StoreSnapshot[]>([])
@@ -96,7 +83,6 @@ export function useContextMonitor(
     getterRef.current ? getterRef.current() : valueRef.current
   ).current
 
-  // Register once (re-registers only if name or limitKB changes)
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return
 
@@ -109,22 +95,17 @@ export function useContextMonitor(
       unsub: () => unregisterStore(name),
     })
 
-    // Notify immediately so the panel shows data on mount
     notify(name, stableGetter, snapshotsRef.current, limitKB, renderCountRef.current)
 
     return () => unregisterStore(name)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name, limitKB])
 
-  // Notify on every render — piggybacks on renders already triggered by
-  // the consumer's state changes, no extra overhead.
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return
     notify(name, stableGetter, snapshotsRef.current, limitKB, renderCountRef.current)
   })
 }
-
-// ─── External Context Monitor ────────────────────────────────────────────────
 
 /**
  * Monitor an existing React Context from outside the provider.
@@ -134,7 +115,7 @@ export function useContextMonitor(
  * Place the returned component *inside* the context's Provider in your tree.
  *
  * @example
- * // memnitor.setup.ts
+ * // monitor.setup.ts
  * export const AuthMonitor = monitorContext('Auth', AuthContext, { limitKB: 200 })
  *
  * // root layout
@@ -154,13 +135,13 @@ export function monitorContext<T>(
     useContextMonitor(name, value, options)
     return createElement(Fragment, null, children)
   }
-  Monitor.displayName = `Memnitor(${name})`
+  Monitor.displayName = `Monitor(${name})`
   return Monitor
 }
 
 /**
  * Patch an existing React Context so every <Context.Provider> automatically
- * reports to memnitor — no changes needed in provider files or the component tree.
+ * reports to react-state-vitals — no changes needed in provider files or the component tree.
  *
  * Call once in your react-state-vitals setup file before the React tree mounts.
  * The warning system will alert you in dev if you also have useContextMonitor
@@ -170,7 +151,7 @@ export function monitorContext<T>(
  * all monitoring config in one central file.
  *
  * @example
- * // memnitor.setup.ts
+ * // monitor.setup.ts
  * import { init, patchContext } from 'react-state-vitals'
  * import { AuthContext } from '@/contexts/auth'
  *
@@ -196,12 +177,10 @@ export function patchContext<T>(
     useContextMonitor(name, value, options)
     return createElement(OriginalProvider, { value }, children)
   }
-  MonitoredProvider.displayName = `Memnitor(${name})`
+  MonitoredProvider.displayName = `Monitor(${name})`
 
   ;(context as any).Provider = MonitoredProvider
 }
-
-// ─── Component API ───────────────────────────────────────────────────────────
 
 export interface MonitoredContext<T> {
   Context: Context<T>
@@ -223,7 +202,7 @@ export function createMonitoredContext<T>(
     return createElement(Context.Provider, { value }, children)
   }
 
-  Provider.displayName = `Memnitor(${name})`
+  Provider.displayName = `Monitor(${name})`
 
   return { Context, Provider }
 }

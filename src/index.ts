@@ -1,16 +1,10 @@
 import { detectIntegrations } from './integrations'
 import { mountPanel } from './panel'
 
-export interface MemnitorConfig {
-  defaultLimitKB?: number
-}
-
-export async function init(config: MemnitorConfig = {}): Promise<void> {
+export async function init(): Promise<void> {
   if (process.env.NODE_ENV !== 'development') return
 
-  const integrations = await detectIntegrations()
-
-  console.log('[react-state-vitals] Active integrations:', integrations)
+  await detectIntegrations()
 
   mountPanel()
 }

@@ -1,12 +1,3 @@
-// Drop-in replacement for zustand's create.
-// Wraps the real store so every state change is measured and emitted to the panel.
-//
-// Supported call forms (all three match zustand's own API):
-//   create<State>('name')((set) => ({ ... }))                           // named
-//   create<State>((set) => ({ ... }))                                   // auto-named
-//   create<State>()((set) => ({ ... }))                                 // curried
-//   create<State>()(devtools(persist((set) => ({ ... }), opts), opts))  // with middleware
-
 import { create as zustandCreate } from 'zustand'
 import type {
   StateCreator,
@@ -41,7 +32,6 @@ type UseBoundStore<S extends StoreApi<unknown>> = {
 
 type ExtractState<S> = S extends { getState: () => infer T } ? T : never
 
-// Overload 1: create<State>('name')((set) => initialState)
 export function create<T>(
   name: string,
   limitKB?: number,
@@ -49,12 +39,10 @@ export function create<T>(
   initializer: StateCreator<T, [], Mos>
 ) => UseBoundStore<Mutate<StoreApi<T>, Mos>>
 
-// Overload 2: create<State>()((set) => initialState) — curried / TS-friendly form
 export function create<T>(): <Mos extends [StoreMutatorIdentifier, unknown][] = []>(
   initializer: StateCreator<T, [], Mos>
 ) => UseBoundStore<Mutate<StoreApi<T>, Mos>>
 
-// Overload 3: create<State>((set) => initialState)
 export function create<
   T,
   Mos extends [StoreMutatorIdentifier, unknown][] = [],
@@ -62,7 +50,6 @@ export function create<
   initializer: StateCreator<T, [], Mos>
 ): UseBoundStore<Mutate<StoreApi<T>, Mos>>
 
-// Implementation
 export function create<T>(
   nameOrInitializer?: string | StateCreator<T, [], []>,
   limitKB = DEFAULT_LIMIT_KB,
@@ -93,8 +80,6 @@ function buildStore<T>(name: string, initializer: any, limitKB: number): UseBoun
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const store: StoreApi<T> = (zustandCreate as any)(initializer)
 
-  // Step 1: our own monitoring subscription (must happen BEFORE we wrap subscribe,
-  // so it is not counted as a component re-render).
   const unsub = store.subscribe((state) => {
     updateCount += 1
     const sizeKB = measureKB(state)
@@ -106,8 +91,6 @@ function buildStore<T>(name: string, initializer: any, limitKB: number): UseBoun
     }
   })
 
-  // Step 2: wrap subscribe so every subsequent listener call (from React components
-  // via useSyncExternalStore) increments the render counter.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const _subscribe = store.subscribe.bind(store) as any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -115,7 +98,6 @@ function buildStore<T>(name: string, initializer: any, limitKB: number): UseBoun
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const wrapped = (...args: any[]) => {
       renderCount += 1
-      // Re-emit so the panel updates the render badge live
       const last = snapshots[snapshots.length - 1]
       if (last) {
         last.renders = renderCount
@@ -134,7 +116,6 @@ function buildStore<T>(name: string, initializer: any, limitKB: number): UseBoun
 
   registerStore(name, { name, type: 'zustand', snapshots, unsub })
 
-  // Emit initial state so the panel picks it up on mount
   const initial = store.getState()
   const initSizeKB = measureKB(initial)
   const initKeys = keysOf(initial)

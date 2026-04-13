@@ -163,19 +163,11 @@ monitorQueryClient(queryClient, 'MyQueries', 1024) // custom name + limit in KB
 
 | Export | Description |
 |---|---|
-| `init(config?)` | Mount the panel. Call once before the React tree renders. |
+| `init()` | Mount the panel. Call once before the React tree renders. |
 | `patchContext(name, context, options?)` | Patch an existing Context to auto-monitor it. |
 | `useContextMonitor(name, value, options?)` | Hook for monitoring a context value from inside its provider. |
 | `createMonitoredContext(name, limitKB?)` | Create a new context + provider with monitoring built in. |
 | `emitter` | Internal event bus (advanced use). |
-
-#### `init` config
-
-```ts
-interface MemnitorConfig {
-  defaultLimitKB?: number  // default warning threshold (default: 50)
-}
-```
 
 #### `useContextMonitor` / `patchContext` options
 

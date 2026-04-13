@@ -1,17 +1,3 @@
-// monitorStore — register any existing zustand store with memnitor.
-// Consumers keep their original zustand/zustand-middleware imports unchanged.
-//
-// Usage (single store):
-//   import { monitorStore } from 'react-state-vitals/zustand'
-//   export const useTodoStore = monitorStore('TodoStore', useTodoStore)
-//
-// Usage (all stores in one setup file — no changes to store files at all):
-//   import { monitorStore } from 'react-state-vitals/zustand'
-//   import { useTodoStore } from './stores/todo'
-//   import { useUserStore } from './stores/user'
-//   monitorStore('TodoStore', useTodoStore)
-//   monitorStore('UserStore', useUserStore)
-
 import { registerStore, unregisterStore } from '../../core/registry'
 import { emitter } from '../../core/emitter'
 import type { StoreSnapshot } from '../../core/registry'
@@ -30,8 +16,6 @@ function keysOf(state: unknown): string[] {
   return state !== null && typeof state === 'object' ? Object.keys(state) : []
 }
 
-// Only the parts of the store we actually call — avoids $$storeMutators conflicts
-// caused by middleware (devtools, persist) adding their own mutator tuples.
 interface MonitorableStore {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   subscribe: (listener: (state: any) => void) => () => void
@@ -54,7 +38,6 @@ export function monitorStore<S extends MonitorableStore>(
   const snapshots: StoreSnapshot[] = []
   let renderCount = 0
 
-  // Step 1: monitoring subscription — before wrapping, so it isn't counted as a render
   const unsub = store.subscribe((state: unknown) => {
     const sizeKB = measureKB(state)
     const keys = keysOf(state)
@@ -65,7 +48,6 @@ export function monitorStore<S extends MonitorableStore>(
     }
   })
 
-  // Step 2: wrap subscribe to count React component re-renders
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const _subscribe = store.subscribe.bind(store) as any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -91,7 +73,6 @@ export function monitorStore<S extends MonitorableStore>(
 
   registerStore(name, { name, type: 'zustand', snapshots, unsub })
 
-  // Emit initial state immediately
   const initial = store.getState()
   const initSizeKB = measureKB(initial)
   const initKeys = keysOf(initial)

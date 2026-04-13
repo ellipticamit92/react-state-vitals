@@ -9,14 +9,6 @@ export async function detectReactQuery(): Promise<boolean> {
   }
 }
 
-// React Query (TanStack Query v4/v5) integration.
-// Subscribes to the QueryCache event bus — fully reactive, no polling needed.
-//
-// Usage:
-//   import { monitorQueryClient } from 'react-state-vitals/react-query'
-//   monitorQueryClient(queryClient)              // name defaults to 'ReactQuery'
-//   monitorQueryClient(queryClient, 'MyQueries') // custom name
-
 import { registerStore, unregisterStore } from '../../core/registry'
 import { emitter } from '../../core/emitter'
 import type { QueryInfo, StoreSnapshot } from '../../core/registry'
@@ -121,7 +113,7 @@ function buildSnapshot(
 }
 
 /**
- * Attach memnitor monitoring to a TanStack QueryClient.
+ * Attach react-state-vitals monitoring to a TanStack QueryClient.
  * Subscribes to the QueryCache event bus — reactive, no polling.
  *
  * @param client   The QueryClient instance

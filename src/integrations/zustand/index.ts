@@ -5,8 +5,6 @@ let zustandAvailable = false
 
 export async function detectZustand(): Promise<boolean> {
   try {
-    // Static string import so Vite/webpack can resolve it from the consuming
-    // app's node_modules. Fails gracefully if zustand is not installed.
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
     await import('zustand')
@@ -21,7 +19,7 @@ export function isZustandAvailable(): boolean {
   return zustandAvailable
 }
 
-// Patched create — auto-registers stores with memnitor
+// Patched create — auto-registers stores with react-state-vitals
 export { create } from './create'
 
 // Middleware re-exports with name interception (drop-in for "zustand/middleware")

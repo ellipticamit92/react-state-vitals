@@ -21,7 +21,7 @@ class Emitter<EventMap extends Record<string, any>> {
   }
 }
 
-export interface MemnitorEvents {
+export interface StateVitalsEvents {
   'store:update': { name: string; sizeKB: number; limitKB: number; keys: string[]; renders?: number; queries?: import('../core/registry').QueryInfo[] }
   'store:warning': { name: string; sizeKB: number; limitKB: number }
   'heap:update': { usedMB: number; totalMB: number; limitMB: number }
@@ -29,4 +29,4 @@ export interface MemnitorEvents {
   'panel:conflict': { name: string; message: string }
 }
 
-export const emitter = new Emitter<MemnitorEvents>()
+export const emitter = new Emitter<StateVitalsEvents>()
