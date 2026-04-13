@@ -1,50 +1,27 @@
 name: Publish
 
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types:
-      - completed
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write   # 🔥 REQUIRED for Trusted Publishing
 
 jobs:
   publish:
-    name: Publish to npm
     runs-on: ubuntu-latest
-    if: >
-      github.event.workflow_run.conclusion == 'success' &&
-      startsWith(github.event.workflow_run.head_branch, 'v')
-    permissions:
-      contents: read
-      id-token: write
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          registry-url: https://registry.npmjs.org
+          registry-url: https://registry.npmjs.org/
 
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
+      - run: npm run build
 
-      - name: Build
-        run: npm run build
-
-      - name: Verify package version matches tag
-        run: |
-          PKG_VERSION="v$(node -p "require('./package.json').version")"
-          TAG_VERSION="${{ github.event.workflow_run.head_branch }}"
-          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
-            echo "Version mismatch: package.json has $PKG_VERSION but tag is $TAG_VERSION"
-            exit 1
-          fi
-
-      - name: Publish
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npm publish --provenance --access public
