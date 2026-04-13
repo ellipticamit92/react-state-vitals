@@ -4,7 +4,7 @@ on:
   push:
     tags:
       - 'v*'
-      
+
 permissions:
   contents: read
   id-token: write   # 🔥 REQUIRED for Trusted Publishing
@@ -12,6 +12,7 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: production
 
     steps:
       - uses: actions/checkout@v4
