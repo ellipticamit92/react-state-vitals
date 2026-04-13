@@ -75,13 +75,11 @@ export function create<T>(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildStore<T>(name: string, initializer: any, limitKB: number): UseBoundStore<StoreApi<T>> {
   const snapshots: StoreSnapshot[] = []
-  let updateCount = 0
   let renderCount = 0
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const store: StoreApi<T> = (zustandCreate as any)(initializer)
 
   const unsub = store.subscribe((state) => {
-    updateCount += 1
     const sizeKB = measureKB(state)
     const keys = keysOf(state)
     snapshots.push({ name, sizeKB, limitKB, keys, updatedAt: Date.now(), renders: renderCount })

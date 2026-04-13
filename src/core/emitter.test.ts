@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { emitter } from './emitter'
 
 // Reset listeners between tests by re-importing would be complex;

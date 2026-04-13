@@ -15,7 +15,6 @@ import {
 import type { StateCreator, StoreMutatorIdentifier } from 'zustand'
 import { setNameContext } from './name-context'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyMutators = [StoreMutatorIdentifier, unknown][]
 
 export function devtools<

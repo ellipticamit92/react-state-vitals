@@ -98,8 +98,7 @@ export function useContextMonitor(
     notify(name, stableGetter, snapshotsRef.current, limitKB, renderCountRef.current)
 
     return () => unregisterStore(name)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, limitKB])
+  }, [name, limitKB]) // intentionally omits stableGetter — it never changes identity
 
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return
