@@ -13,6 +13,13 @@ export async function init(): Promise<void> {
 export { emitter } from './core/emitter'
 export { getRegistry, clearRegistry } from './core/registry'
 export { getHeapSnapshot, isHeapAvailable } from './core/memory'
-export { createMonitoredContext, useContextMonitor, monitorContext, patchContext } from './integrations/context'
+export {
+  createMonitoredContext,
+  createTrackedContextHook,
+  useContextMonitor,
+  useTrackedContext,
+  monitorContext,
+  patchContext,
+} from './integrations/context'
 export type { MonitoredContext } from './integrations/context'
 export type { ActiveIntegrations } from './integrations'

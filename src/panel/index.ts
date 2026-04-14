@@ -2,10 +2,14 @@ import { createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { Panel } from './Panel'
 
+interface MountPanelOptions {
+  heapPollMs?: number
+}
+
 let container: HTMLDivElement | null = null
 let root: Root | null = null
 
-export function mountPanel(): void {
+export function mountPanel(options: MountPanelOptions = {}): void {
   if (typeof document === 'undefined') return
 
   container = document.createElement('div')
@@ -13,7 +17,7 @@ export function mountPanel(): void {
   document.body.appendChild(container)
 
   root = createRoot(container)
-  root.render(createElement(Panel))
+  root.render(createElement(Panel, options))
 }
 
 export function unmountPanel(): void {

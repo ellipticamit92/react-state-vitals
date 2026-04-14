@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import "./styles.css";
 import { emitter } from "../core/emitter";
 import { getRegistry } from "../core/registry";
 import { getHeapSnapshot, isHeapAvailable } from "../core/memory";
-import type { QueryInfo } from "../core/registry";
+import type { ContextConsumerRender, QueryInfo } from "../core/registry";
 import {
   getStatus,
   getColor,
@@ -22,6 +22,8 @@ interface StoreInfo {
   limitKB: number;
   keys: string[];
   renders?: number;
+  consumerRenders?: number;
+  consumers?: ContextConsumerRender[];
   queries?: QueryInfo[];
 }
 
@@ -31,18 +33,34 @@ interface HeapInfo {
   limitMB: number;
 }
 
+interface PanelSize {
+  width: number;
+  height: number;
+}
+
+const DEFAULT_PANEL_WIDTH = 360;
+const DEFAULT_PANEL_HEIGHT = 380;
+const MIN_PANEL_WIDTH = 260;
+const MIN_PANEL_HEIGHT = 220;
+
 /* ------------------ UI PRIMITIVES ------------------ */
 
 function Dot({
   level,
   colorOverride,
+  className,
 }: {
   level: StatusLevel;
   colorOverride?: string;
+  className?: string;
 }) {
   const { dot } = getColor(level);
   return (
-    <span className={`w-1.5 h-1.5 rounded-full ${colorOverride ?? dot}`} />
+    <span
+      className={`w-1.5 h-1.5 rounded-full ${className} ${
+        colorOverride ?? dot
+      }`}
+    />
   );
 }
 
@@ -95,20 +113,23 @@ function Row({
     <div className="px-2 py-1 rounded hover:bg-gray-800 transition-colors">
       {/* Top row */}
       <div className="flex items-center justify-between text-[10px]">
-        <div className="flex items-center gap-1.5 truncate">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
           <Dot level={level} colorOverride={dotColor} />
           <span className={`truncate ${nameColor}`}>{name}</span>
         </div>
 
-        <div
-          className={`flex items-center gap-2 ${
-            level === "ok" ? nameColor : text
-          }`}
+        <span
+          className={`tabular-nums pl-2 ${level === "ok" ? nameColor : text}`}
         >
-          {extra}
-          <span className="tabular-nums">{formatKB(sizeKB)}</span>
-        </div>
+          {formatKB(sizeKB)}
+        </span>
       </div>
+
+      {extra ? (
+        <div className="mt-1 flex flex-wrap items-center justify-end gap-2 text-[9px]">
+          {extra}
+        </div>
+      ) : null}
 
       {/* Progress bar */}
       <div className="mt-1">
@@ -136,7 +157,7 @@ function Section({
 
   return (
     <div className="space-y-1">
-      <div className="text-[9px] text-slate-400 uppercase px-2">
+      <div className="text-[12px] text-slate-400 uppercase px-2">
         {title} ({items.length})
       </div>
       {items.map(render)}
@@ -159,6 +180,33 @@ function StoreRow({ store, accent }: { store: StoreInfo; accent?: Accent }) {
             {store.renders} {store.renders === 1 ? "render" : "renders"}
           </span>
         ) : null
+      }
+    />
+  );
+}
+
+function ContextRow({ store }: { store: StoreInfo }) {
+  const topConsumers = (store.consumers ?? []).slice(0, 2);
+
+  return (
+    <Row
+      name={store.name}
+      sizeKB={store.sizeKB}
+      limitKB={store.limitKB}
+      accent="blue"
+      extra={
+        <>
+          {store.consumerRenders ? (
+            <span className="text-cyan-400">
+              {store.consumerRenders} consumer renders
+            </span>
+          ) : null}
+          {topConsumers.map((consumer) => (
+            <span key={consumer.component} className="text-slate-400">
+              {consumer.component}: {consumer.renders}
+            </span>
+          ))}
+        </>
       }
     />
   );
@@ -190,13 +238,156 @@ function CacheRow({ store }: { store: StoreInfo }) {
 
 /* ------------------ MAIN PANEL ------------------ */
 
-export function Panel() {
+interface PanelProps {
+  heapPollMs?: number;
+}
+
+export function Panel({ heapPollMs = HEAP_POLL_MS }: PanelProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [stores, setStores] = useState<StoreInfo[]>([]);
   const [heap, setHeap] = useState<HeapInfo | null>(null);
   const [conflicts, setConflicts] = useState<
     { name: string; message: string }[]
   >([]);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const [panelSize, setPanelSize] = useState<PanelSize>({
+    width: DEFAULT_PANEL_WIDTH,
+    height: DEFAULT_PANEL_HEIGHT,
+  });
+  const [dragging, setDragging] = useState(false);
+  const [resizing, setResizing] = useState(false);
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    origX: number;
+    origY: number;
+  } | null>(null);
+  const resizeRef = useRef<{
+    startX: number;
+    startY: number;
+    origWidth: number;
+    origHeight: number;
+  } | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (panelRef.current && pos === null) {
+      const h = panelRef.current.offsetHeight;
+      const w = panelRef.current.offsetWidth;
+      setPos({
+        x: window.innerWidth - w - 15,
+        y: window.innerHeight - h - 20,
+      });
+    }
+  });
+
+  const snapToNearestCorner = (x: number, y: number) => {
+    const panel = panelRef.current;
+    const pw = panel ? panel.offsetWidth : 288;
+    const ph = panel ? panel.offsetHeight : 300;
+    const margin = 12;
+    const snapX =
+      x + pw / 2 < window.innerWidth / 2
+        ? margin
+        : window.innerWidth - pw - margin;
+    const snapY =
+      y + ph / 2 < window.innerHeight / 2
+        ? margin
+        : window.innerHeight - ph - margin;
+    setPos({ x: snapX, y: snapY });
+  };
+
+  const onHeaderMouseDown = (e: React.MouseEvent) => {
+    if (!pos) return;
+    e.preventDefault();
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: pos.x,
+      origY: pos.y,
+    };
+    setDragging(true);
+
+    let lastX = pos.x;
+    let lastY = pos.y;
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!dragRef.current) return;
+      lastX = Math.max(
+        0,
+        Math.min(
+          dragRef.current.origX + ev.clientX - dragRef.current.startX,
+          window.innerWidth - panelSize.width
+        )
+      );
+      lastY = Math.max(
+        0,
+        Math.min(
+          dragRef.current.origY + ev.clientY - dragRef.current.startY,
+          window.innerHeight - 40
+        )
+      );
+      setPos({ x: lastX, y: lastY });
+    };
+
+    const onMouseUp = () => {
+      dragRef.current = null;
+      setDragging(false);
+      snapToNearestCorner(lastX, lastY);
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  };
+
+  const onResizeMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizeRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origWidth: panelSize.width,
+      origHeight: panelSize.height,
+    };
+    setResizing(true);
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!resizeRef.current || !pos) return;
+      const maxWidth = Math.max(MIN_PANEL_WIDTH, window.innerWidth - pos.x - 8);
+      const maxHeight = Math.max(
+        MIN_PANEL_HEIGHT,
+        window.innerHeight - pos.y - 8
+      );
+      const nextWidth = Math.min(
+        maxWidth,
+        Math.max(
+          MIN_PANEL_WIDTH,
+          resizeRef.current.origWidth + (ev.clientX - resizeRef.current.startX)
+        )
+      );
+      const nextHeight = Math.min(
+        maxHeight,
+        Math.max(
+          MIN_PANEL_HEIGHT,
+          resizeRef.current.origHeight + (ev.clientY - resizeRef.current.startY)
+        )
+      );
+
+      setPanelSize({ width: nextWidth, height: nextHeight });
+    };
+
+    const onMouseUp = () => {
+      resizeRef.current = null;
+      setResizing(false);
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  };
 
   useEffect(() => {
     const reg = getRegistry();
@@ -212,6 +403,8 @@ export function Panel() {
           limitKB: last.limitKB,
           keys: last.keys,
           renders: last.renders,
+          consumerRenders: last.consumerRenders,
+          consumers: last.consumers,
           queries: last.queries,
         });
       }
@@ -221,7 +414,16 @@ export function Panel() {
 
     const unsubStore = emitter.on(
       "store:update",
-      ({ name, sizeKB, limitKB, keys, renders, queries }) => {
+      ({
+        name,
+        sizeKB,
+        limitKB,
+        keys,
+        renders,
+        consumerRenders,
+        consumers,
+        queries,
+      }) => {
         setStores((prev) => {
           const existing = prev.find((s) => s.name === name);
           const type =
@@ -229,7 +431,17 @@ export function Panel() {
 
           return [
             ...prev.filter((s) => s.name !== name),
-            { name, type, sizeKB, limitKB, keys, renders, queries },
+            {
+              name,
+              type,
+              sizeKB,
+              limitKB,
+              keys,
+              renders,
+              consumerRenders: consumerRenders ?? existing?.consumerRenders,
+              consumers: consumers ?? existing?.consumers,
+              queries,
+            },
           ];
         });
       }
@@ -240,7 +452,7 @@ export function Panel() {
       heapInterval = setInterval(() => {
         const snap = getHeapSnapshot();
         if (snap) setHeap(snap);
-      }, HEAP_POLL_MS);
+      }, heapPollMs);
     }
 
     const unsubConflict = emitter.on("panel:conflict", ({ name, message }) => {
@@ -254,7 +466,7 @@ export function Panel() {
       unsubStore();
       if (heapInterval) clearInterval(heapInterval);
     };
-  }, []);
+  }, [heapPollMs]);
 
   const zustand = stores.filter((s) => s.type === "zustand");
   const context = stores.filter((s) => s.type === "context");
@@ -272,28 +484,45 @@ export function Panel() {
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed top-4 right-4 z-[9999] flex items-center gap-1.5 rounded-full bg-gray-900 px-2 py-1 text-[10px] text-emerald-400 border border-gray-700"
+        className="fixed top-4 right-4 z-[9999] flex items-center gap-1.5 rounded-full bg-gray-900 px-2 py-1 text-xl text-emerald-400 border border-gray-700"
       >
-        <Dot level="ok" />
+        <Dot level="ok" className="w-2 h-2" />
         StateVitals
       </button>
     );
   }
 
   return (
-    <div className="fixed bottom-3 right-3 z-[9999] w-60 bg-slate-900 border border-slate-700 rounded shadow-xl text-[10px] font-mono text-gray-100">
+    <div
+      ref={panelRef}
+      className="fixed right-3 z-[9999] flex flex-col bg-slate-900 border border-slate-700 rounded shadow-xl font-mono text-gray-100"
+      style={{
+        left: pos?.x ?? 0,
+        top: pos?.y ?? 0,
+        width: panelSize.width,
+        height: panelSize.height,
+        visibility: pos ? "visible" : "hidden",
+        transition:
+          dragging || resizing ? "none" : "left 0.2s ease, top 0.2s ease",
+      }}
+    >
       {/* Header */}
-      <div className="flex justify-between items-center px-2 py-1.5 bg-slate-800 border-b border-slate-700">
+      <div
+        className="flex justify-between items-center px-2 py-1.5 bg-slate-800 border-b border-slate-700"
+        style={{ cursor: dragging ? "grabbing" : "move" }}
+        onMouseDown={onHeaderMouseDown}
+      >
         <div>
-          <span className="flex items-center gap-1 text-green-400 font-semibold">
+          <span className="flex items-center gap-1 text-green-400 font-semibold text-lg">
             <Dot level="ok" />
             StateVitals
           </span>
-          <div className="text-[7px] text-slate-400">Live Memory Monitor</div>
+          <div className="text-[12px] text-slate-400">Live Memory Monitor</div>
         </div>
         <button
           onClick={() => setIsOpen(false)}
-          className="text-slate-500 hover:text-slate-300"
+          onMouseDown={(e) => e.stopPropagation()}
+          className="text-slate-500 hover:text-slate-300 text-2xl"
         >
           ×
         </button>
@@ -312,7 +541,7 @@ export function Panel() {
                 onClick={() =>
                   setConflicts((prev) => prev.filter((x) => x.name !== c.name))
                 }
-                className="ml-auto text-yellow-600 hover:text-yellow-400 flex-shrink-0 leading-none"
+                className="ml-auto text-base text-yellow-600 hover:text-yellow-400 flex-shrink-0 leading-none"
               >
                 ×
               </button>
@@ -324,7 +553,7 @@ export function Panel() {
       {/* Heap */}
       {heap && (
         <div className="px-2 py-2 border-b border-slate-800">
-          <div className="flex items-center justify-between text-[9px] mb-1">
+          <div className="flex items-center justify-between text-[12px] mb-1">
             <span className="text-slate-400 uppercase">Heap</span>
             <div className="flex items-center gap-1">
               <span className="text-emerald-400">
@@ -343,7 +572,7 @@ export function Panel() {
       )}
 
       {/* Sections */}
-      <div className="py-1 space-y-2 max-h-[60vh] overflow-y-auto">
+      <div className="py-1 space-y-2 flex-1 min-h-0 overflow-y-auto">
         <Section
           title="Zustand"
           items={zustand}
@@ -352,7 +581,7 @@ export function Panel() {
         <Section
           title="Context"
           items={context}
-          render={(s) => <StoreRow key={s.name} store={s} accent="blue" />}
+          render={(s) => <ContextRow key={s.name} store={s} />}
         />
         <Section
           title="Cache"
@@ -376,6 +605,15 @@ export function Panel() {
           </div>
         </div>
       )}
+
+      <button
+        type="button"
+        aria-label="Resize panel"
+        onMouseDown={onResizeMouseDown}
+        className="absolute bottom-0 right-0 h-4 w-4 cursor-se-resize bg-transparent"
+      >
+        <span className="absolute bottom-1 right-1 h-2 w-2 border-r border-b border-slate-500" />
+      </button>
     </div>
   );
 }

@@ -22,7 +22,16 @@ class Emitter<EventMap extends Record<string, any>> {
 }
 
 export interface StateVitalsEvents {
-  'store:update': { name: string; sizeKB: number; limitKB: number; keys: string[]; renders?: number; queries?: import('../core/registry').QueryInfo[] }
+  'store:update': {
+    name: string;
+    sizeKB: number;
+    limitKB: number;
+    keys: string[];
+    renders?: number;
+    consumerRenders?: number;
+    consumers?: import('../core/registry').ContextConsumerRender[];
+    queries?: import('../core/registry').QueryInfo[];
+  }
   'store:warning': { name: string; sizeKB: number; limitKB: number }
   'heap:update': { usedMB: number; totalMB: number; limitMB: number }
   'integration:ready': { name: 'zustand' | 'context' | 'heap' | 'react-query' }

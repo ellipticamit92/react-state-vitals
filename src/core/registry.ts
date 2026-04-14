@@ -8,6 +8,11 @@ export interface QueryInfo {
   updatedAt: number
 }
 
+export interface ContextConsumerRender {
+  component: string
+  renders: number
+}
+
 export interface StoreSnapshot {
   name: string
   sizeKB: number
@@ -15,6 +20,8 @@ export interface StoreSnapshot {
   keys: string[]
   updatedAt: number
   renders?: number
+  consumerRenders?: number
+  consumers?: ContextConsumerRender[]
   queries?: QueryInfo[]
 }
 

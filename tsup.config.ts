@@ -7,6 +7,7 @@ export default defineConfig({
     'integrations/react-query/index': 'src/integrations/react-query/index.ts',
   },
   format: ['cjs', 'esm'],
+  splitting: true,
   dts: true,
   sourcemap: true,
   clean: true,
