@@ -6,7 +6,6 @@ import {
   useEffect,
   useContext,
 } from "react";
-import * as ReactNs from "react";
 import type { Context, ReactNode, ReactElement } from "react";
 import {
   getRegistry,
@@ -18,8 +17,6 @@ import type { StoreSnapshot } from "../../core/registry";
 
 const DEFAULT_LIMIT_KB = 50;
 const consumerRenderStore = new Map<string, Map<string, number>>();
-const trackedContexts = new WeakMap<object, string>();
-let isUseContextPatched = false;
 
 export interface ContextConsumerRender {
   component: string;
@@ -127,39 +124,39 @@ function emitConsumerUpdate(name: string): void {
   });
 }
 
-function ensureUseContextPatched(): void {
-  if (isUseContextPatched || process.env.NODE_ENV !== "development") return;
+// function ensureUseContextPatched(): void {
+//   if (isUseContextPatched || process.env.NODE_ENV !== "development") return;
 
-  const descriptor = Object.getOwnPropertyDescriptor(ReactNs, "useContext");
-  if (!descriptor) return;
-  if (descriptor.configurable !== true) {
-    // Some runtimes (e.g. Next SSR bundles) expose a non-configurable export.
-    // In that case we skip global patching to avoid runtime crashes.
-    return;
-  }
+//   const descriptor = Object.getOwnPropertyDescriptor(ReactNs, "useContext");
+//   if (!descriptor) return;
+//   if (descriptor.configurable !== true) {
+//     // Some runtimes (e.g. Next SSR bundles) expose a non-configurable export.
+//     // In that case we skip global patching to avoid runtime crashes.
+//     return;
+//   }
 
-  const originalUseContext = ReactNs.useContext;
-  const patchedUseContext = function <T>(context: Context<T>): T {
-    const value = originalUseContext(context);
-    const trackedName = trackedContexts.get(context as unknown as object);
-    if (trackedName) {
-      recordConsumerRender(trackedName);
-      emitConsumerUpdate(trackedName);
-    }
-    return value;
-  } as typeof ReactNs.useContext;
+//   const originalUseContext = ReactNs.useContext;
+//   const patchedUseContext = function <T>(context: Context<T>): T {
+//     const value = originalUseContext(context);
+//     const trackedName = trackedContexts.get(context as unknown as object);
+//     if (trackedName) {
+//       recordConsumerRender(trackedName);
+//       emitConsumerUpdate(trackedName);
+//     }
+//     return value;
+//   } as typeof ReactNs.useContext;
 
-  try {
-    Object.defineProperty(ReactNs, "useContext", {
-      value: patchedUseContext,
-      configurable: true,
-      writable: true,
-    });
-    isUseContextPatched = true;
-  } catch {
-    // Non-fatal: keep provider-level monitoring even if hook patching is blocked.
-  }
-}
+//   try {
+//     Object.defineProperty(ReactNs, "useContext", {
+//       value: patchedUseContext,
+//       configurable: true,
+//       writable: true,
+//     });
+//     isUseContextPatched = true;
+//   } catch {
+//     // Non-fatal: keep provider-level monitoring even if hook patching is blocked.
+//   }
+// }
 
 function measureKB(value: unknown): number {
   try {
