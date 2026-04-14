@@ -8,7 +8,11 @@ import {
 } from "react";
 import * as ReactNs from "react";
 import type { Context, ReactNode, ReactElement } from "react";
-import { getRegistry, registerStore, unregisterStore } from "../../core/registry";
+import {
+  getRegistry,
+  registerStore,
+  unregisterStore,
+} from "../../core/registry";
 import { emitter } from "../../core/emitter";
 import type { StoreSnapshot } from "../../core/registry";
 
@@ -414,9 +418,10 @@ export function patchContext<T>(
 ): void {
   if (process.env.NODE_ENV !== "development") return;
 
-  const OriginalProvider = context.Provider as (
-    props: { value: T; children?: unknown }
-  ) => ReactElement;
+  const OriginalProvider = context.Provider as (props: {
+    value: T;
+    children?: unknown;
+  }) => ReactElement;
 
   function MonitoredProvider({
     value,
