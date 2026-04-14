@@ -84,13 +84,5 @@
   "license": "MIT",
   "engines": {
     "node": ">=20.0.0"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/ellipticamit92/react-state-vitals.git"
-  },
-  "publishConfig": {
-    "access": "public",
-    "registry": "https://registry.npmjs.org/"
   }
 }
