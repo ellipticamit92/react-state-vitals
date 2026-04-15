@@ -1,3 +1,4 @@
+import * as ReactNs from "react";
 import {
   createContext,
   createElement,
@@ -17,6 +18,8 @@ import type { StoreSnapshot } from "../../core/registry";
 
 const DEFAULT_LIMIT_KB = 50;
 const consumerRenderStore = new Map<string, Map<string, number>>();
+const trackedContexts = new WeakMap<object, string>();
+let isUseContextPatched = false;
 
 export interface ContextConsumerRender {
   component: string;
@@ -124,39 +127,97 @@ function emitConsumerUpdate(name: string): void {
   });
 }
 
-// function ensureUseContextPatched(): void {
-//   if (isUseContextPatched || process.env.NODE_ENV !== "development") return;
+function ensureUseContextPatched(): void {
+  if (isUseContextPatched || process.env.NODE_ENV !== "development") return;
 
-//   const descriptor = Object.getOwnPropertyDescriptor(ReactNs, "useContext");
-//   if (!descriptor) return;
-//   if (descriptor.configurable !== true) {
-//     // Some runtimes (e.g. Next SSR bundles) expose a non-configurable export.
-//     // In that case we skip global patching to avoid runtime crashes.
-//     return;
-//   }
+  const descriptor = Object.getOwnPropertyDescriptor(ReactNs, "useContext");
+  if (!descriptor || descriptor.configurable !== true) {
+    // Some runtimes (e.g. Next SSR bundles) expose a non-configurable export.
+    // In that case we skip global patching to avoid runtime crashes.
+    return;
+  }
 
-//   const originalUseContext = ReactNs.useContext;
-//   const patchedUseContext = function <T>(context: Context<T>): T {
-//     const value = originalUseContext(context);
-//     const trackedName = trackedContexts.get(context as unknown as object);
-//     if (trackedName) {
-//       recordConsumerRender(trackedName);
-//       emitConsumerUpdate(trackedName);
-//     }
-//     return value;
-//   } as typeof ReactNs.useContext;
+  const originalUseContext = ReactNs.useContext;
+  const patchedUseContext = function <T>(context: Context<T>): T {
+    const value = originalUseContext(context);
+    const trackedName = trackedContexts.get(context as unknown as object);
+    if (trackedName) {
+      recordConsumerRender(trackedName);
+      // Defer emit to avoid calling setState during another component's render
+      Promise.resolve().then(() => emitConsumerUpdate(trackedName));
+    }
+    return value;
+  } as typeof ReactNs.useContext;
 
-//   try {
-//     Object.defineProperty(ReactNs, "useContext", {
-//       value: patchedUseContext,
-//       configurable: true,
-//       writable: true,
-//     });
-//     isUseContextPatched = true;
-//   } catch {
-//     // Non-fatal: keep provider-level monitoring even if hook patching is blocked.
-//   }
-// }
+  try {
+    Object.defineProperty(ReactNs, "useContext", {
+      value: patchedUseContext,
+      configurable: true,
+      writable: true,
+    });
+    isUseContextPatched = true;
+  } catch {
+    // Non-fatal: context size monitoring still works even if hook patching is blocked.
+  }
+}
+
+/**
+ * Intercepts context._currentValue with a getter so every useContext() call
+ * — regardless of bundler or module system — is tracked.
+ *
+ * React reads _currentValue inside its fiber renderer when executing useContext(ctx).
+ * By owning the getter we infer which component is rendering from the call stack.
+ * Falls back to patching React.useContext if _currentValue is not interceptable.
+ */
+function setupConsumerTracking(name: string, context: Context<unknown>): void {
+  if (process.env.NODE_ENV !== "development") return;
+
+  const ctx = context as unknown as Record<string, unknown>;
+  const valueProp = "_currentValue";
+
+  if (!(valueProp in ctx)) {
+    // No _currentValue — try the React.useContext patch as fallback
+    trackedContexts.set(context as unknown as object, name);
+    ensureUseContextPatched();
+    return;
+  }
+
+  const desc = Object.getOwnPropertyDescriptor(ctx, valueProp);
+  // Already intercepted (getter present) — nothing to do
+  if (desc && typeof desc.get === "function") return;
+
+  let internalValue: unknown = desc?.value;
+  let flushPending = false;
+
+  try {
+    Object.defineProperty(ctx, valueProp, {
+      enumerable: desc?.enumerable ?? true,
+      configurable: true,
+      get(): unknown {
+        const componentName = inferComponentNameFromStack();
+        // Skip React-internal reads that don't originate from a user component
+        if (componentName !== "AnonymousConsumer") {
+          recordConsumerRender(name, componentName);
+          if (!flushPending) {
+            flushPending = true;
+            Promise.resolve().then(() => {
+              flushPending = false;
+              emitConsumerUpdate(name);
+            });
+          }
+        }
+        return internalValue;
+      },
+      set(v: unknown) {
+        internalValue = v;
+      },
+    });
+  } catch {
+    // _currentValue not interceptable — fall back to useContext patching
+    trackedContexts.set(context as unknown as object, name);
+    ensureUseContextPatched();
+  }
+}
 
 function measureKB(value: unknown): number {
   try {
@@ -233,6 +294,15 @@ export interface UseContextMonitorOptions {
    * without adding it as an effect dependency.
    */
   getValue?: () => unknown;
+  /**
+   * Pass the Context object to enable automatic consumer component tracking.
+   * When provided, every component that calls useContext(ctx) will be recorded
+   * in the panel — no changes needed in consumer components.
+   *
+   * @example
+   * useContextMonitor('Todo', value, { context: TodoContext })
+   */
+  context?: Context<unknown>;
 }
 
 /**
@@ -257,7 +327,11 @@ export function useContextMonitor(
 ): void {
   const opts: UseContextMonitorOptions =
     typeof options === "number" ? { limitKB: options } : options;
-  const { limitKB = DEFAULT_LIMIT_KB, getValue } = opts;
+  const { limitKB = DEFAULT_LIMIT_KB, getValue, context } = opts;
+
+  if (context !== undefined && process.env.NODE_ENV === "development") {
+    setupConsumerTracking(name, context);
+  }
 
   const valueRef = useRef<unknown>(value);
   const getterRef = useRef<(() => unknown) | undefined>(getValue);
@@ -280,16 +354,8 @@ export function useContextMonitor(
       name,
       type: "context",
       snapshots: snapshotsRef.current,
-      unsub: () => unregisterStore(name),
+      unsub: () => {},
     });
-
-    notify(
-      name,
-      stableGetter,
-      snapshotsRef.current,
-      limitKB,
-      renderCountRef.current
-    );
 
     return () => {
       consumerRenderStore.delete(name);
@@ -375,13 +441,19 @@ export function monitorContext<T>(
   context: Context<T>,
   options: UseContextMonitorOptions | number = {}
 ): (props: { children: ReactNode }) => ReactElement {
-  function Monitor({ children }: { children: ReactNode }): ReactElement {
+  if (process.env.NODE_ENV === "development") {
+    setupConsumerTracking(name, context as unknown as Context<unknown>);
+  }
+
+  // Lowercase name so inferComponentNameFromStack skips this internal wrapper
+  // when recording consumer components (only uppercase names are treated as components)
+  function monitor({ children }: { children: ReactNode }): ReactElement {
     const value = useContext(context);
     useContextMonitor(name, value, options);
     return createElement(Fragment, null, children);
   }
-  Monitor.displayName = `Monitor(${name})`;
-  return Monitor;
+  monitor.displayName = `Monitor(${name})`;
+  return monitor as (props: { children: ReactNode }) => ReactElement;
 }
 
 /**
@@ -405,20 +477,18 @@ export function monitorContext<T>(
  */
 export function patchContext<T>(
   name: string,
-  context: {
-    readonly Provider: (props: {
-      value: T;
-      children?: unknown;
-    }) => ReactElement;
-  },
+  context: Context<T>,
   options: UseContextMonitorOptions | number = {}
 ): void {
   if (process.env.NODE_ENV !== "development") return;
 
-  const OriginalProvider = context.Provider as (props: {
-    value: T;
-    children?: unknown;
-  }) => ReactElement;
+  setupConsumerTracking(name, context as unknown as Context<unknown>);
+
+  // Read the Provider before patching.
+  // React 17/18: Provider is { $$typeof: REACT_PROVIDER_TYPE, _context: ctx }
+  // React 19:    Provider is the context object itself (Context IS the provider)
+  const ctx = context as unknown as Record<string, unknown>;
+  const OriginalProvider = ctx["Provider"];
 
   function MonitoredProvider({
     value,
@@ -428,11 +498,25 @@ export function patchContext<T>(
     children?: unknown;
   }): ReactElement {
     useContextMonitor(name, value, options);
-    return createElement(OriginalProvider, { value }, children as ReactNode);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return createElement(OriginalProvider as any, { value }, children as ReactNode);
   }
   MonitoredProvider.displayName = `Monitor(${name})`;
-  (context as unknown as { Provider: typeof MonitoredProvider }).Provider =
-    MonitoredProvider;
+
+  // Use Object.defineProperty so this works in both React 18 (plain data property)
+  // and React 19 (getter-only property — direct assignment throws in strict mode).
+  try {
+    Object.defineProperty(ctx, "Provider", {
+      value: MonitoredProvider,
+      configurable: true,
+      writable: true,
+    });
+  } catch {
+    console.warn(
+      `[react-state-vitals] patchContext: could not patch "${name}" context Provider. ` +
+        `Use monitorContext() or useContextMonitor() instead.`
+    );
+  }
 }
 
 export interface MonitoredContext<T> {
@@ -449,6 +533,10 @@ export function createMonitoredContext<T>(
   limitKB = DEFAULT_LIMIT_KB
 ): MonitoredContext<T> {
   const Context = createContext<T>(undefined as unknown as T);
+
+  if (process.env.NODE_ENV === "development") {
+    setupConsumerTracking(name, Context as unknown as Context<unknown>);
+  }
 
   function Provider({ value, children }: { value: T; children?: unknown }) {
     useContextMonitor(name, value, { limitKB });

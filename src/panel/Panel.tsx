@@ -186,29 +186,69 @@ function StoreRow({ store, accent }: { store: StoreInfo; accent?: Accent }) {
 }
 
 function ContextRow({ store }: { store: StoreInfo }) {
-  const topConsumers = (store.consumers ?? []).slice(0, 2);
+  const consumers = store.consumers ?? [];
+  const level = getStatus(store.sizeKB, store.limitKB);
+  const accentColors = ACCENT_COLORS["blue"];
+  const nameColor = level === "ok" ? accentColors.text : getColor(level).text;
+  const barColor = level === "ok" ? accentColors.bar : getColor(level).bar;
+  const dotColor = level === "ok" ? accentColors.dot : undefined;
 
   return (
-    <Row
-      name={store.name}
-      sizeKB={store.sizeKB}
-      limitKB={store.limitKB}
-      accent="blue"
-      extra={
-        <>
-          {store.consumerRenders ? (
-            <span className="text-cyan-400">
-              {store.consumerRenders} consumer renders
+    <div className="px-2 py-1 rounded hover:bg-gray-800 transition-colors">
+      {/* Name + size */}
+      <div className="flex items-center justify-between text-[10px]">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
+          <Dot level={level} colorOverride={dotColor} />
+          <span className={`truncate ${nameColor}`}>{store.name}</span>
+        </div>
+        <span className={`tabular-nums pl-2 ${nameColor}`}>
+          {formatKB(store.sizeKB)}
+        </span>
+      </div>
+
+      {/* Provider renders + total consumer renders */}
+      {(store.renders || store.consumerRenders) ? (
+        <div className="mt-1 flex items-center gap-2 text-[9px]">
+          {store.renders ? (
+            <span className="text-violet-400">
+              {store.renders} {store.renders === 1 ? "render" : "renders"}
             </span>
           ) : null}
-          {topConsumers.map((consumer) => (
-            <span key={consumer.component} className="text-slate-400">
-              {consumer.component}: {consumer.renders}
+          {store.consumerRenders ? (
+            <span className="text-cyan-400">
+              {store.consumerRenders} consumer {store.consumerRenders === 1 ? "render" : "renders"}
             </span>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Progress bar */}
+      <div className="mt-1">
+        <ProgressBar
+          value={store.sizeKB}
+          max={store.limitKB}
+          level={level}
+          barColor={barColor}
+        />
+      </div>
+
+      {/* All consumer components */}
+      {consumers.length > 0 ? (
+        <div className="mt-1.5 space-y-0.5">
+          {consumers.map((consumer) => (
+            <div
+              key={consumer.component}
+              className="flex items-center justify-between text-[9px] px-1"
+            >
+              <span className="text-slate-300 truncate">{consumer.component}</span>
+              <span className="tabular-nums text-cyan-500 pl-2 shrink-0">
+                {consumer.renders}×
+              </span>
+            </div>
           ))}
-        </>
-      }
-    />
+        </div>
+      ) : null}
+    </div>
   );
 }
 
