@@ -2,6 +2,14 @@
   "name": "react-state-vitals",
   "version": "1.2.0",
   "description": "Zero-config memory monitor for React apps — Zustand, React Context, React Query, and JS heap",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ellipticamit92/react-state-vitals.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ellipticamit92/react-state-vitals/issues"
+  },
+  "homepage": "https://github.com/ellipticamit92/react-state-vitals#readme",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
