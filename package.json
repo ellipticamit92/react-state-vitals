@@ -1,7 +1,7 @@
 {
   "name": "react-state-vitals",
-  "version": "1.2.0",
-  "description": "Zero-config memory monitor for React apps — Zustand, React Context, React Query, and JS heap",
+  "version": "2.2.1",
+  "description": "Zero-config memory & render monitor for React apps — Zustand, React Context, React Query, and JS heap",
   "repository": {
     "type": "git",
     "url": "https://github.com/ellipticamit92/react-state-vitals.git"
@@ -10,9 +10,14 @@
     "url": "https://github.com/ellipticamit92/react-state-vitals/issues"
   },
   "homepage": "https://github.com/ellipticamit92/react-state-vitals#readme",
+
+  "license": "MIT",
+  "author": "Amit Kumar",
+
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
+
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -30,9 +35,18 @@
       "require": "./dist/integrations/react-query/index.js"
     }
   },
-  "files": [
-    "dist"
-  ],
+
+  "typesVersions": {
+    "*": {
+      "zustand": ["dist/integrations/zustand"],
+      "react-query": ["dist/integrations/react-query"]
+    }
+  },
+
+  "files": ["dist"],
+
+  "sideEffects": false,
+
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -42,26 +56,21 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui"
   },
+
   "peerDependencies": {
     "@tanstack/react-query": ">=4.0.0",
     "react": ">=17.0.0",
     "react-dom": ">=17.0.0",
     "zustand": ">=4.0.0"
   },
+
   "peerDependenciesMeta": {
-    "react": {
-      "optional": true
-    },
-    "react-dom": {
-      "optional": true
-    },
-    "zustand": {
-      "optional": true
-    },
-    "@tanstack/react-query": {
-      "optional": true
-    }
+    "react": { "optional": true },
+    "react-dom": { "optional": true },
+    "zustand": { "optional": true },
+    "@tanstack/react-query": { "optional": true }
   },
+
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.2",
     "@types/node": "^25.5.2",
@@ -80,18 +89,21 @@
     "vitest": "^4.1.4",
     "zustand": "^5.0.12"
   },
+
   "keywords": [
-    "memory",
-    "monitor",
-    "zustand",
-    "react",
-    "react-query",
-    "tanstack-query",
-    "devtools",
-    "heap"
+    "react performance",
+    "react devtools",
+    "zustand devtools",
+    "react render tracking",
+    "memory leak detection",
+    "react profiler",
+    "react monitoring",
+    "react state debugging",
+    "frontend performance",
+    "react diagnostics"
   ],
-  "license": "MIT",
+
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=16.0.0"
   }
 }
