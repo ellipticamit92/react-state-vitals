@@ -38,10 +38,161 @@ interface PanelSize {
   height: number;
 }
 
+
 const DEFAULT_PANEL_WIDTH = 360;
-const DEFAULT_PANEL_HEIGHT = 380;
+const DEFAULT_PANEL_HEIGHT = 480;
 const MIN_PANEL_WIDTH = 260;
 const MIN_PANEL_HEIGHT = 220;
+const MAX_HEAP_HISTORY = 60;
+
+/* ------------------ CHARTS (CSS / SVG) ------------------ */
+
+interface ChartSeries {
+  data: number[];
+  strokeColor: string;
+  gradientColor: string;
+  gradientId: string;
+}
+
+function SparklineChart({
+  series,
+  width = 200,
+  height = 64,
+}: {
+  series: ChartSeries[];
+  width?: number;
+  height?: number;
+}) {
+  const hasData = series.some((s) => s.data.length >= 2);
+  if (!hasData) {
+    return (
+      <div
+        style={{ width, height }}
+        className="rounded bg-slate-800/50 flex items-center justify-center"
+      >
+        <span className="text-[9px] text-slate-600">collecting…</span>
+      </div>
+    );
+  }
+
+  const pad = 4;
+
+  // Normalize each series independently to the chart height
+  const renderedSeries = series
+    .filter((s) => s.data.length >= 2)
+    .map((s) => {
+      const min = Math.min(...s.data);
+      const max = Math.max(...s.data);
+      const range = max - min || 1;
+      const pts = s.data.map((v, i) => {
+        const x = (i / (s.data.length - 1)) * width;
+        const y = height - pad - ((v - min) / range) * (height - pad * 2);
+        return [x, y] as [number, number];
+      });
+      return { ...s, pts };
+    });
+
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      style={{ overflow: "visible", display: "block" }}
+    >
+      <defs>
+        {renderedSeries.map((s) => (
+          <linearGradient key={s.gradientId} id={s.gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={s.gradientColor} stopOpacity="0.3" />
+            <stop offset="100%" stopColor={s.gradientColor} stopOpacity="0.0" />
+          </linearGradient>
+        ))}
+      </defs>
+
+      {renderedSeries.map((s) => {
+        const fillPoly = [
+          `0,${height}`,
+          ...s.pts.map(([x, y]) => `${x},${y}`),
+          `${width},${height}`,
+        ].join(" ");
+        const polyline = s.pts.map(([x, y]) => `${x},${y}`).join(" ");
+        const last = s.pts[s.pts.length - 1];
+        return (
+          <g key={s.gradientId}>
+            <polygon points={fillPoly} fill={`url(#${s.gradientId})`} />
+            <polyline
+              points={polyline}
+              fill="none"
+              stroke={s.strokeColor}
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+            <circle cx={last[0]} cy={last[1]} r="2.5" fill={s.strokeColor} />
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function CircularGauge({
+  pct,
+  label,
+  size = 72,
+}: {
+  pct: number;
+  label: string;
+  size?: number;
+}) {
+  const clamped = Math.min(Math.max(pct, 0), 100);
+  const color =
+    clamped > 90 ? "#f87171" : clamped > 70 ? "#facc15" : "#06b6d4";
+  const trackColor = "#1e293b";
+  const inner = Math.round(size * 0.72);
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <div
+        style={{
+          width: size,
+          height: size,
+          borderRadius: "50%",
+          background: `conic-gradient(${color} 0% ${clamped}%, ${trackColor} ${clamped}% 100%)`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            width: inner,
+            height: inner,
+            borderRadius: "50%",
+            background: "#0f172a",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color,
+              fontFamily: "monospace",
+            }}
+          >
+            {clamped.toFixed(1)}%
+          </span>
+        </div>
+      </div>
+      <span className="text-[9px] text-slate-400 text-center leading-tight">
+        {label}
+      </span>
+    </div>
+  );
+}
 
 /* ------------------ UI PRIMITIVES ------------------ */
 
@@ -57,7 +208,7 @@ function Dot({
   const { dot } = getColor(level);
   return (
     <span
-      className={`w-1.5 h-1.5 rounded-full ${className} ${
+      className={`w-1.5 h-1.5 rounded-full ${className ?? ""} ${
         colorOverride ?? dot
       }`}
     />
@@ -88,6 +239,54 @@ function ProgressBar({
   );
 }
 
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      style={{
+        transform: open ? "rotate(0deg)" : "rotate(-90deg)",
+        transition: "transform 0.15s ease",
+      }}
+    >
+      <polyline
+        points="1,3 5,7 9,3"
+        fill="none"
+        stroke="#94a3b8"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function Collapsible({
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  title: React.ReactNode;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center gap-1.5 px-2 py-1.5 hover:bg-slate-800/60 transition-colors text-left"
+      >
+        <ChevronIcon open={open} />
+        {title}
+      </button>
+      {open && children}
+    </div>
+  );
+}
+
 function Row({
   name,
   sizeKB,
@@ -111,17 +310,18 @@ function Row({
 
   return (
     <div className="px-2 py-1 rounded hover:bg-gray-800 transition-colors">
-      {/* Top row */}
       <div className="flex items-center justify-between text-[10px]">
         <div className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
           <Dot level={level} colorOverride={dotColor} />
           <span className={`truncate ${nameColor}`}>{name}</span>
         </div>
-
         <span
           className={`tabular-nums pl-2 ${level === "ok" ? nameColor : text}`}
         >
           {formatKB(sizeKB)}
+          {limitKB > 0 && (
+            <span className="text-slate-500">/{formatKB(limitKB)}</span>
+          )}
         </span>
       </div>
 
@@ -131,7 +331,6 @@ function Row({
         </div>
       ) : null}
 
-      {/* Progress bar */}
       <div className="mt-1">
         <ProgressBar
           value={sizeKB}
@@ -148,40 +347,94 @@ function Section({
   title,
   items,
   render,
+  open,
+  onToggle,
 }: {
   title: string;
   items: StoreInfo[];
   render: (item: StoreInfo) => React.ReactNode;
+  open: boolean;
+  onToggle: () => void;
 }) {
   if (!items.length) return null;
 
   return (
-    <div className="space-y-1">
-      <div className="text-[12px] text-slate-400 uppercase px-2">
-        {title} ({items.length})
-      </div>
-      {items.map(render)}
-    </div>
+    <Collapsible
+      open={open}
+      onToggle={onToggle}
+      title={
+        <span className="text-[11px] text-slate-300 font-semibold uppercase tracking-wide">
+          {title}{" "}
+          <span className="text-slate-500 font-normal">({items.length})</span>
+        </span>
+      }
+    >
+      <div className="space-y-0.5 pb-1">{items.map(render)}</div>
+    </Collapsible>
   );
 }
 
 /* ------------------ ROW SPECIALIZATIONS ------------------ */
 
-function StoreRow({ store, accent }: { store: StoreInfo; accent?: Accent }) {
+function StoreRow({ store, accent = "green" }: { store: StoreInfo; accent?: Accent }) {
+  const consumers = store.consumers ?? [];
+  const level = getStatus(store.sizeKB, store.limitKB);
+  const { text, bar } = getColor(level);
+  const accentColors = ACCENT_COLORS[accent];
+  const nameColor = level === "ok" ? accentColors.text : text;
+  const barColor = level === "ok" ? accentColors.bar : bar;
+  const dotColor = level === "ok" ? accentColors.dot : undefined;
+
   return (
-    <Row
-      name={store.name}
-      sizeKB={store.sizeKB}
-      limitKB={store.limitKB}
-      accent={accent}
-      extra={
-        store.renders ? (
+    <div className="px-2 py-1 rounded hover:bg-gray-800 transition-colors">
+      <div className="flex items-center justify-between text-[10px]">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
+          <Dot level={level} colorOverride={dotColor} />
+          <span className={`truncate ${nameColor}`}>{store.name}</span>
+        </div>
+        <span className={`tabular-nums pl-2 ${level === "ok" ? nameColor : text}`}>
+          {formatKB(store.sizeKB)}
+          {store.limitKB > 0 && (
+            <span className="text-slate-500">/{formatKB(store.limitKB)}</span>
+          )}
+        </span>
+      </div>
+
+      {store.renders ? (
+        <div className="mt-1 flex flex-wrap items-center justify-end gap-2 text-[9px]">
           <span className="text-cyan-400">
             {store.renders} {store.renders === 1 ? "render" : "renders"}
           </span>
-        ) : null
-      }
-    />
+        </div>
+      ) : null}
+
+      <div className="mt-1">
+        <ProgressBar
+          value={store.sizeKB}
+          max={store.limitKB}
+          level={level}
+          barColor={barColor}
+        />
+      </div>
+
+      {consumers.length > 0 && (
+        <div className="mt-1.5 space-y-0.5">
+          {consumers.map((consumer) => (
+            <div
+              key={consumer.component}
+              className="flex items-center justify-between text-[9px] px-1"
+            >
+              <span className="text-slate-400 truncate">
+                – {consumer.component}
+              </span>
+              <span className="tabular-nums text-cyan-500 pl-2 shrink-0">
+                {consumer.renders}×
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -195,7 +448,6 @@ function ContextRow({ store }: { store: StoreInfo }) {
 
   return (
     <div className="px-2 py-1 rounded hover:bg-gray-800 transition-colors">
-      {/* Name + size */}
       <div className="flex items-center justify-between text-[10px]">
         <div className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
           <Dot level={level} colorOverride={dotColor} />
@@ -203,26 +455,21 @@ function ContextRow({ store }: { store: StoreInfo }) {
         </div>
         <span className={`tabular-nums pl-2 ${nameColor}`}>
           {formatKB(store.sizeKB)}
-        </span>
-      </div>
-
-      {/* Provider renders + total consumer renders */}
-      {(store.renders || store.consumerRenders) ? (
-        <div className="mt-1 flex items-center gap-2 text-[9px]">
           {store.renders ? (
-            <span className="text-violet-400">
+            <span className="text-slate-500 ml-1">
               {store.renders} {store.renders === 1 ? "render" : "renders"}
             </span>
           ) : null}
-          {store.consumerRenders ? (
-            <span className="text-cyan-400">
-              {store.consumerRenders} consumer {store.consumerRenders === 1 ? "render" : "renders"}
-            </span>
-          ) : null}
+        </span>
+      </div>
+
+      {store.consumerRenders ? (
+        <div className="mt-0.5 text-[9px] text-violet-400">
+          {store.consumerRenders} consumer{" "}
+          {store.consumerRenders === 1 ? "render" : "renders"}
         </div>
       ) : null}
 
-      {/* Progress bar */}
       <div className="mt-1">
         <ProgressBar
           value={store.sizeKB}
@@ -232,7 +479,6 @@ function ContextRow({ store }: { store: StoreInfo }) {
         />
       </div>
 
-      {/* All consumer components */}
       {consumers.length > 0 ? (
         <div className="mt-1.5 space-y-0.5">
           {consumers.map((consumer) => (
@@ -240,7 +486,9 @@ function ContextRow({ store }: { store: StoreInfo }) {
               key={consumer.component}
               className="flex items-center justify-between text-[9px] px-1"
             >
-              <span className="text-slate-300 truncate">{consumer.component}</span>
+              <span className="text-slate-400 truncate">
+                – {consumer.component}
+              </span>
               <span className="tabular-nums text-cyan-500 pl-2 shrink-0">
                 {consumer.renders}×
               </span>
@@ -285,7 +533,10 @@ interface PanelProps {
 export function Panel({ heapPollMs = HEAP_POLL_MS }: PanelProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [stores, setStores] = useState<StoreInfo[]>([]);
+  const storesRef = useRef<StoreInfo[]>([]);
   const [heap, setHeap] = useState<HeapInfo | null>(null);
+  const [heapHistory, setHeapHistory] = useState<number[]>([]);
+  const [statesHistory, setStatesHistory] = useState<number[]>([]);
   const [conflicts, setConflicts] = useState<
     { name: string; message: string }[]
   >([]);
@@ -296,6 +547,12 @@ export function Panel({ heapPollMs = HEAP_POLL_MS }: PanelProps) {
   });
   const [dragging, setDragging] = useState(false);
   const [resizing, setResizing] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(true);
+  const [statesOpen, setStatesOpen] = useState(true);
+  const [zustandOpen, setZustandOpen] = useState(true);
+  const [contextOpen, setContextOpen] = useState(true);
+  const [cacheOpen, setCacheOpen] = useState(true);
+
   const dragRef = useRef<{
     startX: number;
     startY: number;
@@ -450,6 +707,7 @@ export function Panel({ heapPollMs = HEAP_POLL_MS }: PanelProps) {
       }
     });
 
+    storesRef.current = initial;
     setStores(initial);
 
     const unsubStore = emitter.on(
@@ -469,7 +727,7 @@ export function Panel({ heapPollMs = HEAP_POLL_MS }: PanelProps) {
           const type =
             existing?.type ?? getRegistry().get(name)?.type ?? "zustand";
 
-          return [
+          const next = [
             ...prev.filter((s) => s.name !== name),
             {
               name,
@@ -483,17 +741,29 @@ export function Panel({ heapPollMs = HEAP_POLL_MS }: PanelProps) {
               queries,
             },
           ];
+          storesRef.current = next;
+          return next;
         });
       }
     );
 
-    let heapInterval: ReturnType<typeof setInterval> | null = null;
-    if (isHeapAvailable()) {
-      heapInterval = setInterval(() => {
+    const heapInterval = setInterval(() => {
+      if (isHeapAvailable()) {
         const snap = getHeapSnapshot();
-        if (snap) setHeap(snap);
-      }, heapPollMs);
-    }
+        if (snap) {
+          setHeap(snap);
+          setHeapHistory((prev) =>
+            [...prev, snap.usedMB].slice(-MAX_HEAP_HISTORY)
+          );
+        }
+      }
+      const totalStatesKB = storesRef.current.reduce((sum, s) => sum + s.sizeKB, 0);
+      if (storesRef.current.length > 0) {
+        setStatesHistory((prev) =>
+          [...prev, totalStatesKB].slice(-MAX_HEAP_HISTORY)
+        );
+      }
+    }, heapPollMs);
 
     const unsubConflict = emitter.on("panel:conflict", ({ name, message }) => {
       setConflicts((prev) =>
@@ -520,11 +790,13 @@ export function Panel({ heapPollMs = HEAP_POLL_MS }: PanelProps) {
     (heap ? heap.limitMB * 1024 : 0);
   const totalLevel = getStatus(totalKB, totalLimitKB);
 
+  const heapPct = heap ? (heap.usedMB / heap.limitMB) * 100 : 0;
+
   if (!isOpen) {
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed top-4 right-4 z-[9999] flex items-center gap-1.5 rounded-full bg-gray-900 px-2 py-1 text-xl text-emerald-400 border border-gray-700"
+        className="fixed top-4 right-4 z-[9999] flex items-center gap-1.5 rounded-full bg-gray-900 px-2 py-1 text-sm text-emerald-400 border border-gray-700"
       >
         <Dot level="ok" className="w-2 h-2" />
         StateVitals
@@ -535,7 +807,7 @@ export function Panel({ heapPollMs = HEAP_POLL_MS }: PanelProps) {
   return (
     <div
       ref={panelRef}
-      className="fixed right-3 z-[9999] flex flex-col bg-slate-900 border border-slate-700 rounded shadow-xl font-mono text-gray-100"
+      className="fixed z-[9999] flex flex-col bg-slate-900 border border-slate-700/80 rounded-lg shadow-2xl font-mono text-gray-100 overflow-hidden"
       style={{
         left: pos?.x ?? 0,
         top: pos?.y ?? 0,
@@ -546,35 +818,57 @@ export function Panel({ heapPollMs = HEAP_POLL_MS }: PanelProps) {
           dragging || resizing ? "none" : "left 0.2s ease, top 0.2s ease",
       }}
     >
-      {/* Header */}
+      {/* ── Header ── */}
       <div
-        className="flex justify-between items-center px-2 py-1.5 bg-slate-800 border-b border-slate-700"
+        className="flex items-center justify-between px-3 py-2 bg-slate-800 border-b border-slate-700/80 shrink-0"
         style={{ cursor: dragging ? "grabbing" : "move" }}
         onMouseDown={onHeaderMouseDown}
       >
-        <div>
-          <span className="flex items-center gap-1 text-green-400 font-semibold text-lg">
-            <Dot level="ok" />
-            StateVitals
+        <div className="flex items-center gap-2">
+          {/* Hamburger */}
+          <svg width="14" height="12" viewBox="0 0 14 12" fill="none">
+            {[0, 4, 8].map((y) => (
+              <line
+                key={y}
+                x1="0"
+                y1={y + 1}
+                x2="14"
+                y2={y + 1}
+                stroke="#94a3b8"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            ))}
+          </svg>
+          <span className="text-[13px] font-semibold text-slate-100">
+            StateVitals Monitor
           </span>
-          <div className="text-[12px] text-slate-400">Live Memory Monitor</div>
         </div>
-        <button
-          onClick={() => setIsOpen(false)}
-          onMouseDown={(e) => e.stopPropagation()}
-          className="text-slate-500 hover:text-slate-300 text-2xl"
-        >
-          ×
-        </button>
+        <div className="flex items-center gap-1" onMouseDown={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => setIsOpen(false)}
+            className="w-5 h-5 flex items-center justify-center rounded text-slate-500 hover:text-slate-300 hover:bg-slate-700 text-base leading-none"
+            title="Minimize"
+          >
+            –
+          </button>
+          <button
+            onClick={() => setIsOpen(false)}
+            className="w-5 h-5 flex items-center justify-center rounded text-slate-500 hover:text-red-400 hover:bg-slate-700 text-base leading-none"
+            title="Close"
+          >
+            ×
+          </button>
+        </div>
       </div>
 
-      {/* Conflict warnings */}
+      {/* ── Conflict warnings ── */}
       {conflicts.length > 0 && (
-        <div className="border-b border-yellow-500/30 bg-yellow-500/10 px-2.5 py-1.5 space-y-1">
+        <div className="border-b border-yellow-500/30 bg-yellow-500/10 px-2.5 py-1.5 space-y-1 shrink-0">
           {conflicts.map((c) => (
             <div key={c.name} className="flex items-start gap-1.5">
               <span className="text-yellow-400 mt-px flex-shrink-0">⚠</span>
-              <span className="text-yellow-300 text-[9px] leading-snug">
+              <span className="text-yellow-300 text-[8px] leading-snug">
                 {c.message}
               </span>
               <button
@@ -590,50 +884,141 @@ export function Panel({ heapPollMs = HEAP_POLL_MS }: PanelProps) {
         </div>
       )}
 
-      {/* Heap */}
-      {heap && (
-        <div className="px-2 py-2 border-b border-slate-800">
-          <div className="flex items-center justify-between text-[12px] mb-1">
-            <span className="text-slate-400 uppercase">Heap</span>
-            <div className="flex items-center gap-1">
-              <span className="text-emerald-400">
-                {heap.usedMB.toFixed(1)} MB
-              </span>
-              <span className="text-slate-400">/ {heap.limitMB} MB</span>
-            </div>
-          </div>
-          <ProgressBar
-            value={heap.usedMB}
-            max={heap.limitMB}
-            level={getStatus(heap.usedMB, heap.limitMB)}
-            barColor="bg-gradient-to-r from-amber-400 to-yellow-300"
-          />
-        </div>
-      )}
+      {/* ── Scrollable body ── */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
 
-      {/* Sections */}
-      <div className="py-1 space-y-2 flex-1 min-h-0 overflow-y-auto">
-        <Section
-          title="Zustand"
-          items={zustand}
-          render={(s) => <StoreRow key={s.name} store={s} accent="green" />}
-        />
-        <Section
-          title="Context"
-          items={context}
-          render={(s) => <ContextRow key={s.name} store={s} />}
-        />
-        <Section
-          title="Cache"
-          items={cache}
-          render={(s) => <CacheRow key={s.name} store={s} />}
-        />
+        {/* Memory section */}
+        {(heap || statesHistory.length > 0) && (
+          <Collapsible
+            open={memoryOpen}
+            onToggle={() => setMemoryOpen((v) => !v)}
+            title={
+              <span className="text-[11px] text-slate-300 font-semibold uppercase tracking-wide">
+                Memory
+              </span>
+            }
+          >
+            <div className="px-2 pb-2">
+              {/* Stat row */}
+              <div className="flex items-center gap-3 mb-2 text-[10px]">
+                {heap && (
+                  <>
+                    <span className="text-slate-400">
+                      Total:{" "}
+                      <span className="text-emerald-400 font-semibold">
+                        {heap.totalMB.toFixed(0)}MB
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-1 text-slate-400">
+                      <span className="inline-block w-2 h-0.5 rounded" style={{ background: "#22d3ee" }} />
+                      Heap:{" "}
+                      <span className="text-cyan-400 font-semibold">
+                        {heap.usedMB.toFixed(0)}MB
+                      </span>
+                    </span>
+                  </>
+                )}
+                {statesHistory.length > 0 && (
+                  <span className="flex items-center gap-1 text-slate-400">
+                    <span className="inline-block w-2 h-0.5 rounded" style={{ background: "#34d399" }} />
+                    States:{" "}
+                    <span className="text-emerald-400 font-semibold">
+                      {formatKB(statesHistory[statesHistory.length - 1] ?? 0)}
+                    </span>
+                  </span>
+                )}
+              </div>
+
+              {/* Chart + gauge row */}
+              <div
+                className="flex items-center gap-2 rounded-md overflow-hidden"
+                style={{ background: "rgba(15,23,42,0.7)", padding: "8px" }}
+              >
+                {/* Sparkline stretches */}
+                <div className="flex-1 min-w-0">
+                  <SparklineChart
+                    series={[
+                      ...(heapHistory.length >= 2 ? [{
+                        data: heapHistory,
+                        strokeColor: "#22d3ee",
+                        gradientColor: "#06b6d4",
+                        gradientId: "svGradHeap",
+                      }] : []),
+                      ...(statesHistory.length >= 2 ? [{
+                        data: statesHistory,
+                        strokeColor: "#34d399",
+                        gradientColor: "#10b981",
+                        gradientId: "svGradStates",
+                      }] : []),
+                    ]}
+                    width={panelSize.width - 140}
+                    height={64}
+                  />
+                </div>
+
+                {/* Circular gauge */}
+                {heap && <CircularGauge pct={heapPct} label="Heap Usage" size={72} />}
+              </div>
+            </div>
+          </Collapsible>
+        )}
+
+        {/* Divider between memory and states */}
+        {(heap || statesHistory.length > 0) && stores.length > 0 && (
+          <div className="border-t border-slate-800 mx-2" />
+        )}
+
+        {/* Active States */}
+        {stores.length > 0 && (
+          <Collapsible
+            open={statesOpen}
+            onToggle={() => setStatesOpen((v) => !v)}
+            title={
+              <span className="text-[11px] text-slate-300 font-semibold uppercase tracking-wide">
+                Active States
+              </span>
+            }
+          >
+            <div className="space-y-2 pb-2">
+              {zustand.length > 0 && (
+                <Section
+                  title="Zustand"
+                  items={zustand}
+                  render={(s) => (
+                    <StoreRow key={s.name} store={s} accent="green" />
+                  )}
+                  open={zustandOpen}
+                  onToggle={() => setZustandOpen((v) => !v)}
+                />
+              )}
+              {context.length > 0 && (
+                <Section
+                  title="React Context"
+                  items={context}
+                  render={(s) => <ContextRow key={s.name} store={s} />}
+                  open={contextOpen}
+                  onToggle={() => setContextOpen((v) => !v)}
+                />
+              )}
+              {cache.length > 0 && (
+                <Section
+                  title="Cache"
+                  items={cache}
+                  render={(s) => <CacheRow key={s.name} store={s} />}
+                  open={cacheOpen}
+                  onToggle={() => setCacheOpen((v) => !v)}
+                />
+              )}
+            </div>
+          </Collapsible>
+        )}
+
       </div>
 
-      {/* Footer — Total */}
+      {/* ── Footer total ── */}
       {(stores.length > 0 || heap) && (
-        <div className="px-2 py-1 border-t border-slate-700 bg-slate-800/60">
-          <div className="flex items-center justify-between text-[10px] mb-1">
+        <div className="px-3 py-1.5 border-t border-slate-700 bg-slate-800/60 shrink-0">
+          <div className="flex items-center justify-between text-[10px]">
             <span className="text-slate-400">Total Size</span>
             <span
               className={`tabular-nums font-semibold ${
@@ -646,6 +1031,7 @@ export function Panel({ heapPollMs = HEAP_POLL_MS }: PanelProps) {
         </div>
       )}
 
+      {/* ── Resize handle ── */}
       <button
         type="button"
         aria-label="Resize panel"

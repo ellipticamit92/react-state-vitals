@@ -1,6 +1,6 @@
 import { registerStore, unregisterStore } from '../../core/registry'
 import { emitter } from '../../core/emitter'
-import type { StoreSnapshot } from '../../core/registry'
+import type { StoreSnapshot, ContextConsumerRender } from '../../core/registry'
 
 const DEFAULT_LIMIT_KB = 50
 
@@ -14,6 +14,41 @@ function measureKB(state: unknown): number {
 
 function keysOf(state: unknown): string[] {
   return state !== null && typeof state === 'object' ? Object.keys(state) : []
+}
+
+function inferComponentNameFromStack(): string {
+  const fallback = 'AnonymousComponent'
+  const stack = new Error().stack
+  if (!stack) return fallback
+
+  const lines = stack.split('\n')
+  const ignored = new Set([
+    'monitorStore',
+    'inferComponentNameFromStack',
+    'patchedSubscribe',
+  ])
+  const ignoredFragments = [
+    'node_modules',
+    'react-dom',
+    'scheduler',
+    '__webpack',
+    'next/dist',
+  ]
+
+  for (const line of lines) {
+    if (ignoredFragments.some((f) => line.includes(f))) continue
+    const match = line.match(/at\s+([A-Za-z0-9_$\.]+)/)
+    if (!match) continue
+    const raw = match[1]
+    const fnName = raw.includes('.') ? raw.split('.').pop() ?? raw : raw
+    if (!fnName || fnName.startsWith('use')) continue
+    if (ignored.has(fnName)) continue
+    if (!/^[A-Z]/.test(fnName)) continue
+    if (fnName === 'renderWithHooks' || fnName === 'beginWork' || fnName === 'commitRoot') continue
+    return fnName
+  }
+
+  return fallback
 }
 
 interface MonitorableStore {
@@ -37,12 +72,21 @@ export function monitorStore<S extends MonitorableStore>(
 ): S {
   const snapshots: StoreSnapshot[] = []
   let renderCount = 0
+  const componentRenders = new Map<string, number>()
+
+  function getConsumers(): ContextConsumerRender[] {
+    return Array.from(componentRenders.entries())
+      .map(([component, renders]) => ({ component, renders }))
+      .sort((a, b) => b.renders - a.renders)
+  }
 
   const unsub = store.subscribe((state: unknown) => {
     const sizeKB = measureKB(state)
     const keys = keysOf(state)
-    snapshots.push({ name, sizeKB, limitKB, keys, updatedAt: Date.now(), renders: renderCount })
-    emitter.emit('store:update', { name, sizeKB, limitKB, keys, renders: renderCount })
+    const consumers = getConsumers()
+    const consumerRenders = consumers.reduce((sum, c) => sum + c.renders, 0)
+    snapshots.push({ name, sizeKB, limitKB, keys, updatedAt: Date.now(), renders: renderCount, consumerRenders, consumers })
+    emitter.emit('store:update', { name, sizeKB, limitKB, keys, renders: renderCount, consumerRenders, consumers })
     if (sizeKB > limitKB * 0.8) {
       emitter.emit('store:warning', { name, sizeKB, limitKB })
     }
@@ -51,19 +95,27 @@ export function monitorStore<S extends MonitorableStore>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const _subscribe = store.subscribe.bind(store) as any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ;(store as any).subscribe = (listener: any) => {
+  ;(store as any).subscribe = function patchedSubscribe(listener: any) {
+    const componentName = inferComponentNameFromStack()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const wrapped = (...args: any[]) => {
       renderCount += 1
+      componentRenders.set(componentName, (componentRenders.get(componentName) ?? 0) + 1)
       const last = snapshots[snapshots.length - 1]
       if (last) {
         last.renders = renderCount
+        const consumers = getConsumers()
+        const consumerRenders = consumers.reduce((sum, c) => sum + c.renders, 0)
+        last.consumers = consumers
+        last.consumerRenders = consumerRenders
         emitter.emit('store:update', {
           name,
           sizeKB: last.sizeKB,
           limitKB,
           keys: last.keys,
           renders: renderCount,
+          consumerRenders,
+          consumers,
         })
       }
       return listener(...args)
