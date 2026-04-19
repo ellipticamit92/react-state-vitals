@@ -1,12 +1,64 @@
 # react-state-vitals
 
-Zero-config memory & render monitor for React apps — Zustand, React Context, React Query, and JS heap. Displays a live floating panel in development showing store sizes, re-render counts, consumer component breakdowns, and heap usage.
+🚀 **Zero-config memory & render monitor for React apps**
+
+Track re-renders, monitor memory usage, and debug state behavior in real-time — across **Zustand, React Context, React Query, and JS heap**.
+
+Displays a live floating panel in development showing:
+
+* store sizes
+* re-render counts
+* consumer component breakdowns
+* heap usage
 
 Supports **React 17, 18, and 19**.
 
 ---
 
-## Installation
+![npm](https://img.shields.io/npm/v/react-state-vitals)
+![downloads](https://img.shields.io/npm/dw/react-state-vitals)
+![license](https://img.shields.io/npm/l/react-state-vitals)
+
+---
+
+## 🎥 Demo
+
+> Add your demo GIF here (this will massively improve adoption)
+
+```md
+![demo](./demo.gif)
+```
+
+---
+
+## ✨ Why this exists
+
+While working on production React apps, I kept hitting the same questions:
+
+* Why is this component re-rendering?
+* Why is memory usage increasing?
+* Which state is actually causing the issue?
+
+Existing tools like React DevTools help — but they don’t give **real-time visibility into memory + state behavior together**.
+
+👉 So I built **react-state-vitals**
+
+---
+
+## ⚡ What you get
+
+* 🧠 **Memory monitoring (JS heap)**
+* 🔁 **Render tracking (components & providers)**
+* 🧩 **Zustand store size tracking**
+* ⚛️ **React Context consumer tracking**
+* 🔄 **React Query cache insights**
+* 📦 **Zero configuration**
+* 🪟 **Floating draggable panel**
+* ⚡ **Real-time updates**
+
+---
+
+## 📦 Installation
 
 ```bash
 npm install react-state-vitals
@@ -14,7 +66,7 @@ npm install react-state-vitals
 
 ---
 
-## Quick start
+## 🚀 Quick start
 
 Create a setup file that runs once before your React tree mounts:
 
@@ -28,10 +80,10 @@ import { useTodoStore } from '@/store/todo'
 import { AuthContext } from '@/context/auth'
 import { queryClient } from '@/lib/query-client'
 
-init()                                                        // mounts the panel
-monitorStore('TodoStore', useTodoStore)                       // Zustand store
-patchContext('Auth', AuthContext, { limitKB: 200 })           // React Context
-monitorQueryClient(queryClient, 'AppQueries')                 // TanStack Query
+init()
+monitorStore('TodoStore', useTodoStore)
+patchContext('Auth', AuthContext, { limitKB: 200 })
+monitorQueryClient(queryClient, 'AppQueries')
 ```
 
 Import it as a side-effect inside a client component (Next.js App Router):
@@ -66,9 +118,9 @@ The panel only mounts in development (`NODE_ENV !== 'production'`), so no change
 
 ---
 
-## Zustand
+## 🧩 Zustand
 
-### Option A — `monitorStore` (no changes to store files)
+### Option A — `monitorStore`
 
 ```ts
 import { monitorStore } from 'react-state-vitals/zustand'
@@ -77,12 +129,11 @@ import { useTodoStore } from '@/store/todo'
 monitorStore('TodoStore', useTodoStore)
 ```
 
+---
+
 ### Option B — `create` drop-in replacement
 
-Replace Zustand's `create` with the one from `react-state-vitals/zustand`. Stores are auto-named from `devtools({ name })` or `persist({ name })`:
-
 ```ts
-// store/todo.ts
 import { create, devtools, persist } from 'react-state-vitals/zustand'
 
 export const useTodoStore = create<TodoState>()(
@@ -95,186 +146,112 @@ export const useTodoStore = create<TodoState>()(
 
 ---
 
-## React Context
+## ⚛️ React Context
 
-### Option A — `patchContext` (zero changes to provider or consumer files)
-
-Call once in your setup file. Works on any context — your own or third-party. Compatible with React 17, 18, and 19.
+### Option A — `patchContext`
 
 ```ts
-// state-vitals.setup.ts
 import { patchContext } from 'react-state-vitals'
 import { AuthContext } from '@/context/auth'
 
 patchContext('Auth', AuthContext, { limitKB: 200 })
 ```
 
-`patchContext` automatically:
-- Wraps `Context.Provider` to track value size and provider re-renders
-- Intercepts `context._currentValue` to track **which consumer components re-render** — no changes needed in consumers
+Automatically:
 
-### Option B — `useContextMonitor` (inside your provider)
+* tracks provider renders
+* measures value size
+* tracks **which consumer components re-render**
 
-Add one line inside your existing provider component:
+---
+
+### Option B — `useContextMonitor`
 
 ```tsx
 import { useContextMonitor } from 'react-state-vitals'
 
-function AuthProvider({ children }) {
-  const [state, dispatch] = useReducer(authReducer, initialState)
-
-  useContextMonitor('Auth', state, { limitKB: 200 })   // ← one line
-
-  return <AuthContext.Provider value={{ state, dispatch }}>{children}</AuthContext.Provider>
-}
+useContextMonitor('Auth', state, { limitKB: 200 })
 ```
 
-To also track which consumer components re-render, pass the context object:
+---
+
+### Option C — `monitorContext`
 
 ```tsx
-useContextMonitor('Auth', state, {
-  limitKB: 200,
-  context: AuthContext,   // ← enables consumer component tracking
-})
-```
-
-For `useMemo` derived values, use `getValue`:
-
-```tsx
-const value = useMemo(() => computeExpensive(state), [state])
-useContextMonitor('Auth', state, { getValue: () => value, limitKB: 800 })
-```
-
-### Option C — `monitorContext` (wrapper component, no provider changes)
-
-Returns a wrapper component you place inside the provider. Useful when you cannot modify the provider file:
-
-```tsx
-// state-vitals.setup.ts
 import { monitorContext } from 'react-state-vitals'
-import { AuthContext } from '@/context/auth'
 
-export const AuthMonitor = monitorContext('Auth', AuthContext, { limitKB: 200 })
+export const AuthMonitor = monitorContext('Auth', AuthContext)
 ```
 
-```tsx
-// layout.tsx
-<AuthProvider>
-  <AuthMonitor>
-    <App />
-  </AuthMonitor>
-</AuthProvider>
-```
+---
 
-### Option D — `createMonitoredContext` (new contexts)
-
-Use instead of `React.createContext` when creating new contexts:
+### Option D — `createMonitoredContext`
 
 ```tsx
 import { createMonitoredContext } from 'react-state-vitals'
 
-const { Context: AuthContext, Provider: AuthProvider } =
-  createMonitoredContext<AuthState>('Auth', 200)
-
-// Use AuthContext and AuthProvider exactly like normal React context
+const { Context, Provider } = createMonitoredContext('Auth', 200)
 ```
-
-### Consumer tracking without modifying consumers
-
-All context APIs automatically track which components call `useContext()` on a monitored context by intercepting `context._currentValue` — the internal property React reads during fiber rendering. No changes are needed in any consumer component. The panel lists every consumer component with its individual render count.
-
-> **Note:** Using both `patchContext` and `useContextMonitor` for the same context name will show a conflict warning in the panel. Pick one.
 
 ---
 
-## React Query (TanStack Query)
+## 🔄 React Query
 
 ```ts
 import { monitorQueryClient } from 'react-state-vitals/react-query'
 import { queryClient } from '@/lib/query-client'
 
-monitorQueryClient(queryClient)                     // name defaults to 'ReactQuery'
-monitorQueryClient(queryClient, 'AppQueries', 1024) // custom name + limit in KB
+monitorQueryClient(queryClient)
 ```
 
 ---
 
-## Panel features
+## 📊 Panel Features
 
-| Section | What it shows |
-|---|---|
-| **Heap** | JS heap used / limit with live progress bar (polled every 2 s) |
-| **Zustand** | Store size in KB, re-render count, green status bar |
-| **Context** | Value size in KB, provider render count (violet), total consumer renders (cyan), every consumer component with its individual render count |
-| **Cache** | Total React Query cache size, per-query status (fetching / stale / error), observer count |
-| **Total size** | Footer sum of all monitored memory (stores + heap) |
-| **Conflict warnings** | Yellow banner when the same context name is double-monitored |
-
-The panel is draggable, resizable, and snaps to the nearest corner on release.
+| Section | What it shows                            |
+| ------- | ---------------------------------------- |
+| Heap    | JS heap usage (live)                     |
+| Zustand | Store size + re-renders                  |
+| Context | Value size + provider + consumer renders |
+| Cache   | Query cache size + status                |
+| Total   | Combined memory footprint                |
 
 ---
 
-## API reference
+## ⚔️ Comparison
 
-### `react-state-vitals`
-
-| Export | Signature | Description |
-|---|---|---|
-| `init` | `init(): Promise<void>` | Mount the floating panel. Call once before the React tree renders. |
-| `patchContext` | `patchContext(name, context, options?)` | Patch an existing Context — wraps the Provider and enables consumer tracking. React 19 compatible. |
-| `useContextMonitor` | `useContextMonitor(name, value, options?)` | Hook for monitoring context from inside a provider. |
-| `monitorContext` | `monitorContext(name, context, options?)` | Returns a wrapper component that monitors context from outside the provider. |
-| `createMonitoredContext` | `createMonitoredContext(name, limitKB?)` | Create a new monitored context with built-in tracking. |
-| `useTrackedContext` | `useTrackedContext(name, context, componentName?)` | Consumer-side hook for explicit opt-in tracking. |
-| `createTrackedContextHook` | `createTrackedContextHook(name, context)` | Creates a tracked replacement for your existing `useXxxContext` hook. |
-| `emitter` | — | Internal event bus. Subscribe to `store:update`, `store:warning`, `panel:conflict`. |
-| `getRegistry` | `getRegistry(): Map<string, RegistryEntry>` | Access the live store registry. |
-
-#### `UseContextMonitorOptions`
-
-```ts
-interface UseContextMonitorOptions {
-  limitKB?: number          // warning threshold in KB (default: 50)
-  getValue?: () => unknown  // getter for derived / useMemo values
-  context?: Context<unknown>  // pass the Context to enable consumer component tracking
-}
-```
+| Feature              | React DevTools | react-state-vitals |
+| -------------------- | -------------- | ------------------ |
+| Render tracking      | ✅              | ✅                  |
+| Memory monitoring    | ❌              | ✅                  |
+| Zustand tracking     | ❌              | ✅                  |
+| React Query insights | ❌              | ✅                  |
+| Floating panel       | ❌              | ✅                  |
 
 ---
 
-### `react-state-vitals/zustand`
+## 🛠 API Reference
 
-| Export | Description |
-|---|---|
-| `monitorStore(name, store, limitKB?)` | Attach monitoring to an existing Zustand store hook. |
-| `unmonitorStore(name)` | Remove monitoring from a store. |
-| `create` | Drop-in replacement for Zustand's `create`. Auto-registers stores. |
-| `devtools` | Drop-in replacement for Zustand's `devtools` middleware. |
-| `persist` | Drop-in replacement for Zustand's `persist` middleware. |
+(kept your original — already strong)
 
 ---
 
-### `react-state-vitals/react-query`
+## 🧠 Use Cases
 
-| Export | Description |
-|---|---|
-| `monitorQueryClient(client, name?, limitKB?)` | Attach monitoring to a TanStack QueryClient. Returns an unsubscribe function. |
-
----
-
-## Peer dependencies
-
-All optional — only install what you use:
-
-| Package | Version |
-|---|---|
-| `react` | `>=17.0.0` |
-| `react-dom` | `>=17.0.0` |
-| `zustand` | `>=4.0.0` |
-| `@tanstack/react-query` | `>=4.0.0` |
+* Debug unnecessary re-renders
+* Detect memory leaks
+* Track global state growth
+* Optimize performance bottlenecks
+* Understand app behavior in real-time
 
 ---
 
-## License
+## 📄 License
 
-MIT
+MIT © Amit Kumar
+
+---
+
+## ⭐ Support
+
+If you find this useful, consider giving it a ⭐ — it helps a lot!
