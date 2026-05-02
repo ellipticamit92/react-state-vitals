@@ -1,6 +1,6 @@
 {
   "name": "react-state-vitals",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "description": "Zero-config memory & render monitor for React apps — Zustand, React Context, React Query, and JS heap",
   "repository": {
     "type": "git",
