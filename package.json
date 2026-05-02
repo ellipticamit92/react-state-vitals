@@ -4,7 +4,7 @@
   "description": "Zero-config memory & render monitor for React apps — Zustand, React Context, React Query, and JS heap",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ellipticamit92/react-state-vitals.git"
+    "url": "git+https://github.com/ellipticamit92/react-state-vitals.git"
   },
   "bugs": {
     "url": "https://github.com/ellipticamit92/react-state-vitals/issues"
